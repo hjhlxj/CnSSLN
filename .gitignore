@@ -22,3 +22,5 @@
 *.tlog
 *.lastbuildstate
 *.so
+*.lib
+*.Po
