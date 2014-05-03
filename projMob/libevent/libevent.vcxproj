@@ -1,0 +1,106 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{81D8033E-5F6C-4A27-AFE2-045B7DABAA1A}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>libevent</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IncludePath>..\3rd\libevent-2.0.21-stable\compat;..\3rd\libevent-2.0.21-stable\WIN32-Code;..\3rd\libevent-2.0.21-stable\include;..\3rd\libevent-2.0.21-stable;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <Text Include="ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\buffer.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\bufferevent.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\bufferevent_async.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\bufferevent_filter.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\bufferevent_pair.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\bufferevent_ratelim.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\bufferevent_sock.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\buffer_iocp.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\evdns.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\event.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\event_iocp.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\event_tagging.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\evmap.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\evthread.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\evthread_win32.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\evutil.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\evutil_rand.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\http.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\listener.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\log.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\signal.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\strlcpy.c" />
+    <ClCompile Include="..\3rd\libevent-2.0.21-stable\win32select.c" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

@@ -1,0 +1,5 @@
+Register:
+"if (0 == redis.pcall('HEXISTS', 'user:'..KEYS[1], 'password')) then return redis.pcall('HMSET', 'user:'..KEYS[1], 'password', ARGV[1]) else return 'AE' end"
+
+--like
+eval "if (0 == redis.pcall('HEXISTS', 'user:'..KEYS[1], 'password')) then return redis.pcall('HMSET', 'user:'..KEYS[1], 'password', ARGV[1]) else return 'AE' end" 1 abc@def.com 123456
