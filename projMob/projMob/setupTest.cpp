@@ -379,7 +379,16 @@ using namespace mobDev;
 
 int main()
 {
+	SecurityManager sm;
+	char b[120];
+	char a[120] = "data to encrypt";
+	auto k = strlen(a);
 	
+	auto vl = sm.encrypt(a, k, b, 100);
+	memset(a, 0, sizeof(a));
+	vl = sm.decrypt(b, k, a, 100);
+	cout << a;
+	return 0;
 #ifdef WIN32
 	WSADATA wsa_data;
 	WSAStartup(0x0201, &wsa_data);

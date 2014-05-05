@@ -241,3 +241,55 @@ char *intToByte(int number, char *str)
 
 	return str;
 };
+
+int SecurityManager::encrypt(const char *src, int srcLen, char *dest, int destLen)
+{
+	/*
+		Naive implementation of encryption algorithm.
+			For odd index:
+				1. Take one's complement;
+				2. Left shift 2 bits;
+				3. Exclusive OR dest[0]
+			For even index:
+				1. Exclusive OR 0x7c
+				2. Right shift 3 bits;
+	*/
+	int i, maxLen = srcLen < destLen ? srcLen : destLen;
+	char xorkey = getXORKey();
+	for (i = 0; i < maxLen; i += 2)
+	{
+		dest[i] = src[i] ^ xorkey;
+		dest[i] = (dest[i] >> 3 & 0x1f) | (dest[i] << 5 & 0xE0);
+	}
+	for (i = 1; i < maxLen; i += 2)
+	{
+		dest[i] = ~src[i];
+		dest[i] = (dest[i] << 2 & 0xfc) | (dest[i] >> 6 & 0x03);
+		dest[i] ^= dest[0];
+	}
+
+	return maxLen;
+}
+
+int SecurityManager::decrypt(const char *src, int srcLen, char *dest, int destLen)
+{
+	/*
+		Naive implementation of the decryption algorithm
+		Reverse the encrypt steps.
+	*/
+	int i, maxLen = srcLen < destLen ? srcLen : destLen;
+	char xorkey = getXORKey();
+	for (i = 1; i < maxLen; i += 2)
+	{
+		dest[i] = src[i] ^ src[0];
+		dest[i] = (dest[i] >> 2 & 0x3f) | (dest[i] << 6 & 0xC0);
+		dest[i] = ~dest[i];
+	}
+	for (i = 0; i < maxLen; i += 2)
+	{
+		dest[i] = (src[i] << 3 & 0xf8) | (src[i] >> 5 & 0x07);
+		dest[i] ^= xorkey;
+	}	
+
+	return maxLen;
+}

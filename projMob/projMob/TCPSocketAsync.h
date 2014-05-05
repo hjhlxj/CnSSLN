@@ -41,6 +41,21 @@ typedef int socklen_t;
 #include <string>
 #include <cstring>
 
+class SecurityManager
+{
+public:
+	/** Encrypt a string src, with length srcLen, the encryt string will be stored
+		in dest, with max length specified by destMaxLen
+	*/
+	virtual int encrypt(const char *src, int srcLen, char *dest, int destMaxLen);
+	/** Decrypt a string src, with length srcLen, the encryt string will be stored
+	in dest, with max length specified by destMaxLen
+	*/
+	virtual int decrypt(const char *src, int srcLen, char *dest, int destMaxLen);
+protected:
+	char getXORKey() const { return 0x7c; }
+};
+
 class TCPSocketAsync
 {
 public:
@@ -50,14 +65,6 @@ enum TCPSocketAsync_SIGNAL
 	TSSIG_TIMEOUT = -2,
 	TSSIG_ERROR = -1,
 }; 
-private:
-	int socketfd;
-	bool isConnected;
-	std::string hostName;
-	std::string serviceName;
-	fd_set rset, wset;
-	int timeout;
-	int ntimeout;
 public:
 	TCPSocketAsync(void);
 	~TCPSocketAsync(void);
@@ -67,6 +74,15 @@ public:
 	int recv(char *buf, int buflen);
 	int checkConnectState(int timeoutus = 0);
 	int getSocketFd() const { return this->socketfd; }
+private:
+	int socketfd;
+	bool isConnected;
+	std::string hostName;
+	std::string serviceName;
+	fd_set rset, wset;
+	int timeout;
+	int ntimeout;
+	SecurityManager sm;
 };
 
 //utility functions
