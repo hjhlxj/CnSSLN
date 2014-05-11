@@ -5,7 +5,7 @@ each client connection, and closes each connection once it is flushed.
 
 Where possible, it exits cleanly in response to a SIGINT (ctrl-c).
 */
-#ifndef WIN32
+
 
 #include <string.h>
 #include <errno.h>
@@ -214,7 +214,7 @@ namespace mobDev
 				sret.append(cm[1].str().c_str());
 				sret.append(" password ");
 				sret.append(cm[2].str().c_str());
-				
+
 				userPassword = cm[2].str();
 			}
 			else
@@ -280,7 +280,7 @@ namespace mobDev
 					//evaluate the register lua script
 					static const char *regScript = R"(evalsha 2f7df8a90ff08242ff87b597349b897e47af2d7d 1 )";
 					/*R"(eval "if 0 == redis.pcall('HEXISTS', KEYS[1], 'password') then )"
-							 R"(return redis.pcall('HMSET', 'user:'..KEYS[1], 'password', ARGV[1]) else return 'AE' end" 1 )";*/
+					R"(return redis.pcall('HMSET', 'user:'..KEYS[1], 'password', ARGV[1]) else return 'AE' end" 1 )";*/
 
 					sret.append(regScript);
 					sret.append("user:");
@@ -315,11 +315,41 @@ namespace mobDev
 		}
 	};
 
+	class ProtoHandlerPushMsg : public ProtoHandlerBase
+	{
+	public:
+		ErrorCode doCommand(const char *paramBuf, int bufLen)
+		{
+			return ErrorCode::OK;
+		}
+		const char *serializeResult(char *dest, int buflen, int *resultLen)
+		{
+			//TODO: write result to client
+			return dest;
+		}
+	};
+
+	class ProtoHandlerPollMsg : public ProtoHandlerBase
+	{
+	public:
+		ErrorCode doCommand(const char *paramBuf, int bufLen)
+		{
+			return ErrorCode::OK;
+		}
+		const char *serializeResult(char *dest, int buflen, int *resultLen)
+		{
+			//TODO: write result to client
+			return dest;
+		}
+	};
+
 	enum class RequestType : short
 	{
 		Login,
 		Register,
-		GPSDataUpload
+		PushMsg,
+		PollMsg,
+		Unknown
 	};
 
 	class ProtoFactory
@@ -347,31 +377,38 @@ namespace mobDev
 
 	RequestType ProtoFactory::getProtoTypeFromStream(const char *buf)
 	{
-		if (01 == buf[1] && 10 == buf[0])
+		if (01 == buf[1] && 00 == buf[0])
+			return RequestType::PushMsg;
+		else if (02 == buf[1] && 00 == buf[0])
+			return RequestType::PollMsg;
+		else if (01 == buf[1] && 10 == buf[0])
 			return RequestType::Login;
 		else if (02 == buf[1] && 10 == buf[0])
 			return RequestType::Register;
-		else if (01 == buf[1] && 20 == buf[0])
-			return RequestType::GPSDataUpload;
+		else 
+			return RequestType::Unknown;
 	}
 
 	ProtoHandlerBase *ProtoFactory::getProtoHandler(RequestType rt)
 	{
 		switch (rt)
 		{
+		case mobDev::RequestType::PushMsg:
+			return new ProtoHandlerPushMsg();
+			break;
+		case mobDev::RequestType::PollMsg:
+			return new ProtoHandlerPollMsg();
+			break;
 		case mobDev::RequestType::Login:
 			return new ProtoHandlerLogin();
 			break;
 		case mobDev::RequestType::Register:
 			return new ProtoHandlerRegister();
 			break;
-		case mobDev::RequestType::GPSDataUpload:
-			return nullptr;
-			break;
 		default:
 			return nullptr;
 			break;
-		}			
+		}
 	}
 
 	ProtoFactory * ProtoFactory::pInst = nullptr;
@@ -379,9 +416,9 @@ namespace mobDev
 
 using namespace mobDev;
 
-int mainx()
+int main()
 {
-	
+
 #ifdef WIN32
 	WSADATA wsa_data;
 	WSAStartup(0x0201, &wsa_data);
@@ -391,7 +428,8 @@ int mainx()
 	unique_ptr<DBDelegate> _tptr(new DBDelegateRedis());
 	dbdelegate = move(_tptr);
 	//static char var[] = R"(eval 'if 0 == redis.pcall("HEXISTS", "user:"..KEYS[1], "password") then return redis.pcall("HMSET", "user:"..KEYS[1], "password", ARGV[1]) else return "AE" end' 1 abc@def.com 123456)";
-	static char var[] = R"(evalsha 2f7df8a90ff08242ff87b597349b897e47af2d7d 1 user:abc@def.com 123456)";
+	//static char var[] = R"(evalsha 2f7df8a90ff08242ff87b597349b897e47af2d7d 1 user:abc@def.com 123456)";
+	static char var[] = R"(zrevrangebyscore c1 +inf -inf withscores limit 0  1)";
 	auto v = dbdelegate->doCommand(var);//R"(HGET user:abc@barfooa.com password)");
 	return 0;
 	//cout << dbret1;
@@ -409,16 +447,17 @@ int mainx()
 	//string s(&buf[7]);
 	if (regex_match(&buf[7], cm, pat))
 	{
-		for (auto x : cm) 
+		for (auto x : cm)
 			cout << x << '\t';
 		sprintf(cmd, "HMSET user:%s password %s", cm[1].str().c_str(), cm[2].str().c_str());
 		auto dbret = dbdelegate->doCommand(cmd);
 		//printf("%s\n", dbret.c_str());
 	}
 }
+
 #ifdef WIN32
 int
-mainax(int argc, char **argv)
+maing(int argc, char **argv)
 #else
 int
 main(int argc, char **argv)
@@ -529,15 +568,15 @@ static void
 conn_readcb(struct bufferevent *bev, void *user_data)
 {
 	/** TODO: to avoid server blocking, the operation in this
-		function may need to put into a seperating thread.
-		**/
+	function may need to put into a seperating thread.
+	**/
 	static const size_t BUFSIZE = 1024;
 	char buf[BUFSIZE + 64];
 	const char *pret = nullptr;
 	//memset(buf, 0, sizeof(buf));
 	int iRetCode = -999;
 	int byteRead = bufferevent_read(bev, buf, BUFSIZE);
-	int len; 
+	int len;
 	//filter out invalid streams
 	if (byteRead < COMMAND_LEN_LOWERBOUND)
 	{
@@ -553,7 +592,7 @@ conn_readcb(struct bufferevent *bev, void *user_data)
 	//StringEncryptor.decrypt(buf);
 
 	len = byteToInt(&buf[2]);
-	if (len <=0 || byteRead < len + COMMAND_LEN_LOWERBOUND)
+	if (len <= 0 || byteRead < len + COMMAND_LEN_LOWERBOUND)
 	{
 		printf("Broken stream detected, discarding...\n");
 		iRetCode = -998;
@@ -563,16 +602,16 @@ conn_readcb(struct bufferevent *bev, void *user_data)
 
 	//Parse command, proto
 	/**
-		Proto format V1.0:
-		B(byte) 1-2: proto id, 1001 for Login;
-		B 3-6 (type int): proto content length in bytes, with proto id and length excluded;
-		B 7- end of proto: proto content, fields may seperated by \t (tab)
+	Proto format V1.0:
+	B(byte) 1-2: proto id, 1001 for Login;
+	B 3-6 (type int): proto content length in bytes, with proto id and length excluded;
+	B 7- end of proto: proto content, fields may seperated by \t (tab)
 
-		example: proto Login with email abc@foobar.com and password '123456'
-		the proto string would expected to be
-				10 01    21(int)    abc@foobar.com  (\t)	123456
-		BYTE:   1  2     3-6        7        --------           27
-		**/
+	example: proto Login with email abc@foobar.com and password '123456'
+	the proto string would expected to be
+	10 01    21(int)    abc@foobar.com  (\t)	123456
+	BYTE:   1  2     3-6        7        --------           27
+	**/
 
 	{	//#C2362 in VS2013
 		iRetCode = -1;
@@ -590,31 +629,6 @@ conn_readcb(struct bufferevent *bev, void *user_data)
 			iRetCode = ph->getErrorCode();
 		}
 	}
-	//switch (protoType)
-	//{
-	//case RequestType::GPSDataUpload:
-	//	break;
-	//case RequestType::Login:
-	//{
-	//	//do register
-	//	int len = byteToInt(&buf[2]);
-	//	buf[len + 7] = '\0';
-	//	unique_ptr<ProtoHandlerBase> ph(ppf->getProtoHandler(RequestType::Login));
-	//	auto cmd = ph->parseAndGetCommand(&buf[2]);
-	//	if (cmd.size() > 0)
-	//	{
-	//		auto dbret = dbdelegate->doCommand(cmd.c_str());
-	//		printf("%s\n", dbret.c_str());
-	//		if (!strcmp("OK", dbret.c_str()))
-	//			iRetCode = 0;
-	//	}
-	//}	
-	//	break;
-	//case RequestType::Register:
-	//	break;
-	//default:
-	//	break;
-	//}
 
 ret2client:
 	intToByte(iRetCode, buf);
@@ -661,4 +675,3 @@ signal_cb(evutil_socket_t sig, short events, void *user_data)
 
 	event_base_loopexit(base, &delay);
 }
-#endif

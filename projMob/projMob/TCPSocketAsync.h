@@ -35,7 +35,7 @@ typedef int socklen_t;
 #define ERRNO errno
 #define NEWOULDBLOCK	EWOULDBLOCK
 #define NEINPROGRESS	EINPROGRESS
-#define SET_SOCKET_NONBLOCK(fd) (fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, 0) | O_NONBLOCK))
+#define SET_SOCKET_NONBLOCK(sockfd) (fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, 0) | O_NONBLOCK))
 #endif
 
 #include <string>

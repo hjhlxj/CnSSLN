@@ -70,6 +70,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="PSserver.cpp" />
     <ClCompile Include="setupTest.cpp" />
     <ClCompile Include="SetuptestClient.cpp" />
     <ClCompile Include="TCPSocketAsync.cpp" />
