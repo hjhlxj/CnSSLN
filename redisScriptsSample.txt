@@ -4,4 +4,4 @@ Register:
 --like
 eval "if (0 == redis.pcall('HEXISTS', 'user:'..KEYS[1], 'password')) then return redis.pcall('HMSET', 'user:'..KEYS[1], 'password', ARGV[1]) else return 'AE' end" 1 abc@def.com 123456
 
-eval "local ns = redis.pcall('INCR', KEYS[1]); return redis.pcall('ZADD', KEYS[2], ns, ARGV[1])" 2 score_cnt c1 "me What the hell?"
+eval "local ns = redis.pcall('INCR', KEYS[1]..KEYS[2]); return redis.pcall('ZADD', KEYS[2], ns, ns..' '..ARGV[1])" 2 score_cnt c1 "me What the hell?"

@@ -249,9 +249,9 @@ namespace mobDev
 			static char cmdbuf[2048];
 			if (ErrorCode::OK == getErrorCode())
 			{
-				memcpy(cmdbuf, dbcmd.c_str(), dbcmd.length());
-				cmdbuf[dbcmd.length()] = '\0';
-				auto dbret = execDBCommand(cmdbuf);
+				/*memcpy(cmdbuf, dbcmd.c_str(), dbcmd.length());
+				cmdbuf[dbcmd.length()] = '\0';*/
+				auto dbret = execDBCommand(dbcmd.c_str());
 				auto ecode = parseDBResult(dbret);
 				setErrorCode(ecode);
 				cleanUpDBResult(dbret);
@@ -320,12 +320,62 @@ namespace mobDev
 	public:
 		ErrorCode doCommand(const char *paramBuf, int bufLen)
 		{
-			return ErrorCode::OK;
+			string dbcmd = parseAndGetCommand(paramBuf);
+			if (ErrorCode::OK == getErrorCode())
+			{
+				auto dbret = execDBCommand(dbcmd.c_str());
+				auto ecode = parseDBResult(dbret);
+				setErrorCode(ecode);
+				cleanUpDBResult(dbret);
+			}
+			return getErrorCode();
 		}
 		const char *serializeResult(char *dest, int buflen, int *resultLen)
 		{
 			//TODO: write result to client
 			return dest;
+		}
+	protected:
+		string parseAndGetCommand(const char *buf)
+		{
+			string sret;
+			setErrorCode(ErrorCode::OK);
+			string s(buf);
+			auto firstBlank = s.find_first_of(" ");
+			static const char cmd[] = "evalsha 6e6753a833cc687ca9bfa8076c14e24c852cc2e7 2 score_cnt ";
+			
+			if (firstBlank != string::npos)
+			{
+				string channelName = s.substr(0, firstBlank);
+				/*auto secondBlank = s.find_first_of(" ", firstBlank + 1);
+				string uname = s.substr(firstBlank + 1, secondBlank - firstBlank - 1);*/
+				s = s.substr(firstBlank + 1);
+				sret.clear();
+				sret.append(cmd);
+				sret.append(channelName);
+				sret.append(" '");
+				sret.append(s);
+				sret.append("'");
+				printf(sret.c_str());
+			}
+			else
+			{
+				setErrorCode(ErrorCode::WrongNumberOfArguments);
+			}
+
+			return sret;
+		}
+
+		ErrorCode parseDBResult(const DBResultBase * dbret)
+		{
+			if (auto prr = dynamic_cast<const RedisResult *>(dbret))
+			{
+				if (REDIS_REPLY_INTEGER == prr->reply->type && 1 == prr->reply->integer)
+				{
+					return ErrorCode::OK;
+				}
+			}
+			return ErrorCode::UnknownError;
 		}
 	};
 
@@ -418,7 +468,10 @@ using namespace mobDev;
 
 int main()
 {
-
+	/*string ss(R"(Yoo yoo)");
+	ss.append("\"");
+	cout << ss;
+	return 0;*/
 #ifdef WIN32
 	WSADATA wsa_data;
 	WSAStartup(0x0201, &wsa_data);
@@ -429,14 +482,15 @@ int main()
 	dbdelegate = move(_tptr);
 	//static char var[] = R"(eval 'if 0 == redis.pcall("HEXISTS", "user:"..KEYS[1], "password") then return redis.pcall("HMSET", "user:"..KEYS[1], "password", ARGV[1]) else return "AE" end' 1 abc@def.com 123456)";
 	//static char var[] = R"(evalsha 2f7df8a90ff08242ff87b597349b897e47af2d7d 1 user:abc@def.com 123456)";
-	static char var[] = R"(zrevrangebyscore c1 +inf -inf withscores limit 0  1)";
-	auto v = dbdelegate->doCommand(var);//R"(HGET user:abc@barfooa.com password)");
-	return 0;
+	//static char var[] = R"(zrevrangebyscore c1 +inf -inf withscores limit 0  1)";
+	//auto v = dbdelegate->doCommand(var);//R"(HGET user:abc@barfooa.com password)");
+	//return 0;
 	//cout << dbret1;
 	buf[0] = 10;
 	buf[1] = 01;
-	auto hdl = ProtoFactory::getInstance()->getProtoHandler(RequestType::Register);
-	const char *content = "+8613933324563\t123456\t123456";
+	unique_ptr<ProtoHandlerBase> hdl(ProtoFactory::getInstance()->getProtoHandler(RequestType::PushMsg));
+	//const char *content = "+8613933324563\t123456\t123456";
+	const char *content = "c1 sb. yoll yoll!";
 	auto r = hdl->doCommand(content, strlen(content));
 	intToByte(strlen(content), &buf[2]);
 	memcpy(&buf[7], content, strlen(content));
