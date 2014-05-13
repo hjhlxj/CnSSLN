@@ -15,6 +15,7 @@ Where possible, it exits cleanly in response to a SIGINT (ctrl-c).
 #include <unordered_map>
 #include <memory>
 #include <iostream>
+#include <stdarg.h>
 #ifndef WIN32
 #include <netinet/in.h>
 # ifdef _XOPEN_SOURCE_EXTENDED
@@ -83,7 +84,8 @@ namespace mobDev
 		DBDelegate(const DBDelegate&) = delete;
 		DBDelegate &operator=(const DBDelegate&) = delete;
 		virtual ~DBDelegate(){}
-		virtual DBResultBase *doCommand(const char *cmd) = 0;
+		virtual DBResultBase *doCommand(const char *cmd, va_list ap) = 0;
+		virtual DBResultBase *doCommand(const char *cmd, ...) = 0;
 		virtual int cleanUpResult(DBResultBase *r) = 0;
 	};
 	class DBDelegateRedis : public DBDelegate
@@ -113,9 +115,18 @@ namespace mobDev
 				//freeReplyObject(reply);
 			}
 		}
-		DBResultBase *doCommand(const char *cmd) {
+		DBResultBase *doCommand(const char *cmd, ...) {
+			va_list ap;
+			va_start(ap, cmd);
+			auto ret = doCommand(cmd, ap);
+			va_end(ap);
+			return ret;
+		}
+
+		DBResultBase *doCommand(const char *cmd, va_list vl) {
 			if (nullptr != reply) freeReplyObject(reply);
-			reply = (redisReply *)redisCommand(c, cmd);
+	
+			reply = (redisReply *)redisvCommand(c, cmd, vl);
 
 			if (reply->type == REDIS_REPLY_STRING || reply->type == REDIS_REPLY_STATUS ||
 				reply->type == REDIS_REPLY_ERROR)
@@ -172,7 +183,13 @@ namespace mobDev
 		inline ErrorCode getErrorCode() const { return e; }
 	protected:
 		virtual void setErrorCode(ErrorCode e) { this->e = e; }
-		virtual DBResultBase *execDBCommand(const char *cmd) { return dbdelegate->doCommand(cmd); }
+		virtual DBResultBase *execDBCommand(const char *cmd, ...) { 
+			va_list ap;
+			va_start(ap, cmd);
+			auto ret = dbdelegate->doCommand(cmd, ap);
+			va_end(ap);
+			return ret;
+		}
 		virtual int cleanUpDBResult(DBResultBase *dbr) { return dbdelegate->cleanUpResult(dbr); }
 	private:
 		ErrorCode e;
@@ -323,7 +340,7 @@ namespace mobDev
 			string dbcmd = parseAndGetCommand(paramBuf);
 			if (ErrorCode::OK == getErrorCode())
 			{
-				auto dbret = execDBCommand(dbcmd.c_str());
+				auto dbret = execDBCommand(dbcmd.c_str(), msg.c_str());
 				auto ecode = parseDBResult(dbret);
 				setErrorCode(ecode);
 				cleanUpDBResult(dbret);
@@ -353,10 +370,10 @@ namespace mobDev
 				sret.clear();
 				sret.append(cmd);
 				sret.append(channelName);
-				sret.append(" '");
-				sret.append(s);
-				sret.append("'");
-				printf(sret.c_str());
+				sret.append(" %s");
+				msg = s;
+				//printf(sret.c_str());
+				cout << sret << endl;
 			}
 			else
 			{
@@ -377,20 +394,105 @@ namespace mobDev
 			}
 			return ErrorCode::UnknownError;
 		}
+	private:
+		string msg;
 	};
 
 	class ProtoHandlerPollMsg : public ProtoHandlerBase
 	{
 	public:
+		ProtoHandlerPollMsg() : pdbr(nullptr) {}
 		ErrorCode doCommand(const char *paramBuf, int bufLen)
 		{
-			return ErrorCode::OK;
+			string dbcmd = parseAndGetCommand(paramBuf);
+			if (ErrorCode::OK == getErrorCode())
+			{
+				auto dbret = execDBCommand(dbcmd.c_str());
+				auto ecode = parseDBResult(dbret);
+				setErrorCode(ecode);
+				//cleanUpDBResult(dbret);
+			}
+			return getErrorCode();
 		}
 		const char *serializeResult(char *dest, int buflen, int *resultLen)
 		{
 			//TODO: write result to client
+			if (nullptr == pdbr || getErrorCode() != ErrorCode::OK)
+				return nullptr;
+			int rl = 0;
+			int capacity = buflen - 4;
+			char *p = dest + 4;
+			int slen;
+			auto rp = pdbr->reply->element;
+			for (int i = 0; i < pdbr->reply->elements; ++i)
+			{
+				slen = strlen(rp[i]->str);
+				if (slen < capacity)
+				{
+					memcpy(p, rp[i]->str, slen);
+					++rl;
+					p += slen + 1;
+					*p++ = '\0';
+					capacity -= slen + 1;
+				}
+				else
+				{
+					break;
+				}
+			}
+			*resultLen = p - dest;
+			intToByte(rl, dest);
 			return dest;
 		}
+	protected:
+		string parseAndGetCommand(const char *buf)
+		{
+			string sret;
+			setErrorCode(ErrorCode::OK);
+			string s(buf);
+			auto firstBlank = s.find_first_of(" ");
+
+			if (firstBlank != string::npos)
+			{
+				string channelName = s.substr(0, firstBlank);
+				if (int scoreLower = byteToInt(&s[firstBlank]) < 0)
+				{
+					sret.clear();
+					sret.append("zrangebyscore ");
+					sret.append(channelName);
+					sret.append(" ");
+					sret.append()
+					sret.append(" -inf +inf");
+					//printf(sret.c_str());
+					cout << sret << endl;
+				}
+				else
+				{
+					setErrorCode(ErrorCode::InvalidArguments);
+				}
+			}
+			else
+			{
+				setErrorCode(ErrorCode::WrongNumberOfArguments);
+			}
+
+			return sret;
+		}
+
+		ErrorCode parseDBResult(const DBResultBase * dbret)
+		{
+			if (auto prr = dynamic_cast<const RedisResult *>(dbret))
+			{
+				if (REDIS_REPLY_ARRAY == prr->reply->type)
+				{
+					return ErrorCode::OK;
+					pdbr = prr;
+				}
+			}
+			return ErrorCode::UnknownError;
+		}
+	private:
+		const RedisResult *pdbr;
 	};
 
 	enum class RequestType : short
@@ -470,6 +572,14 @@ int main()
 {
 	/*string ss(R"(Yoo yoo)");
 	ss.append("\"");
+	auto ft = [](const char *fmt, ...) -> void {
+		char buf[256];
+		va_list ap;
+		va_start(ap, fmt);
+		vsprintf(buf, fmt, ap);
+		cout << buf;
+	};
+	ft("Hello %s\n", ss.c_str());
 	cout << ss;
 	return 0;*/
 #ifdef WIN32
@@ -488,10 +598,16 @@ int main()
 	//cout << dbret1;
 	buf[0] = 10;
 	buf[1] = 01;
-	unique_ptr<ProtoHandlerBase> hdl(ProtoFactory::getInstance()->getProtoHandler(RequestType::PushMsg));
+	//unique_ptr<ProtoHandlerBase> hdl(ProtoFactory::getInstance()->getProtoHandler(RequestType::PushMsg));
+	unique_ptr<ProtoHandlerBase> hdl(ProtoFactory::getInstance()->getProtoHandler(RequestType::PollMsg));
 	//const char *content = "+8613933324563\t123456\t123456";
-	const char *content = "c1 sb. yoll yoll!";
+	//const char *content = "c1 sb. yoll yoll!";
+	char content[10] = "c1 ";
+	intToByte(1, &content[3]);
+	content[7] = '\0';
 	auto r = hdl->doCommand(content, strlen(content));
+	int flen;
+	auto sr = hdl->serializeResult(buf, 1000, &flen);
 	intToByte(strlen(content), &buf[2]);
 	memcpy(&buf[7], content, strlen(content));
 	int len = byteToInt(&buf[2]);
