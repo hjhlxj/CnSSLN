@@ -6,6 +6,7 @@
 #include <Windows.h>
 
 #pragma comment (lib, "Ws2_32.lib")
+#pragma comment( lib, "rpcrt4.lib" )
 
 extern u_long __anoymous_iMode;
 
@@ -56,6 +57,20 @@ protected:
 	char getXORKey() const { return 0x7c; }
 };
 
+class MACAddressUtility
+{
+public:
+	static long GetMACAddress(unsigned char * result);
+private:
+#if defined(WIN32) || defined(UNDER_CE)
+	static long GetMACAddressMSW(unsigned char * result);
+#elif defined(__APPLE__)
+	static long GetMACAddressMAC(unsigned char * result);
+#elif defined(LINUX) || defined(linux)
+	static long GetMACAddressLinux(unsigned char * result);
+#endif
+};
+
 class TCPSocketAsync
 {
 public:
@@ -74,7 +89,9 @@ public:
 	int recv(char *buf, int buflen);
 	int checkConnectState(int timeoutus = 0);
 	int getSocketFd() const { return this->socketfd; }
+	static int getMacAddr(unsigned char *buf);
 private:
+	int checkConnectStateR(int timeoutus = 0);
 	int socketfd;
 	bool isConnected;
 	std::string hostName;

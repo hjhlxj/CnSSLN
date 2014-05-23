@@ -22,6 +22,8 @@ Where possible, it exits cleanly in response to a SIGINT (ctrl-c).
 #  include <arpa/inet.h>
 # endif
 #include <sys/socket.h>
+#endif
+#ifdef USE_BOOST_REGEX
 #include <boost/regex.hpp>
 using namespace boost;
 #else
@@ -57,6 +59,7 @@ static void conn_writecb(struct bufferevent *, void *);
 static void conn_readcb(struct bufferevent *, void *);
 static void conn_eventcb(struct bufferevent *, short, void *);
 static void signal_cb(evutil_socket_t, short, void *);
+static SecurityManager sm;
 
 namespace mobDev
 {
@@ -124,7 +127,10 @@ namespace mobDev
 		}
 
 		DBResultBase *doCommand(const char *cmd, va_list vl) {
-			if (nullptr != reply) freeReplyObject(reply);
+			/*if (nullptr != reply) {
+				freeReplyObject(reply);
+				reply = nullptr;
+			}*/
 	
 			reply = (redisReply *)redisvCommand(c, cmd, vl);
 
@@ -139,7 +145,7 @@ namespace mobDev
 			else if (reply->type == REDIS_REPLY_NIL)
 				printf("Redis Reply NIL");
 			else if (reply->type == REDIS_REPLY_ARRAY)
-				printf("Redis Reply Array: len %d\n", reply->len);
+				printf("Redis Reply Array: len %d\n", reply->elements);
 
 			return new RedisResult(reply);
 		}
@@ -431,7 +437,7 @@ namespace mobDev
 				{
 					memcpy(p, rp[i]->str, slen);
 					++rl;
-					p += slen + 1;
+					p += slen;
 					*p++ = '\0';
 					capacity -= slen + 1;
 				}
@@ -448,6 +454,7 @@ namespace mobDev
 		string parseAndGetCommand(const char *buf)
 		{
 			string sret;
+			char cmd[256];
 			setErrorCode(ErrorCode::OK);
 			string s(buf);
 			auto firstBlank = s.find_first_of(" ");
@@ -455,14 +462,12 @@ namespace mobDev
 			if (firstBlank != string::npos)
 			{
 				string channelName = s.substr(0, firstBlank);
-				if (int scoreLower = byteToInt(&s[firstBlank]) < 0)
+				int scoreLower = byteToInt(&buf[firstBlank + 1]);
+				if (scoreLower >= 0)
 				{
+					sprintf(cmd, "zrangebyscore %s %d +inf", channelName.c_str(), scoreLower);
 					sret.clear();
-					sret.append("zrangebyscore ");
-					sret.append(channelName);
-					sret.append(" ");
-					sret.append()
-					sret.append(" -inf +inf");
+					sret.append(cmd);
 					//printf(sret.c_str());
 					cout << sret << endl;
 				}
@@ -485,8 +490,8 @@ namespace mobDev
 			{
 				if (REDIS_REPLY_ARRAY == prr->reply->type)
 				{
-					return ErrorCode::OK;
 					pdbr = prr;
+					return ErrorCode::OK;
 				}
 			}
 			return ErrorCode::UnknownError;
@@ -568,7 +573,7 @@ namespace mobDev
 
 using namespace mobDev;
 
-int main()
+int mainw()
 {
 	/*string ss(R"(Yoo yoo)");
 	ss.append("\"");
@@ -608,6 +613,16 @@ int main()
 	auto r = hdl->doCommand(content, strlen(content));
 	int flen;
 	auto sr = hdl->serializeResult(buf, 1000, &flen);
+	int nr = byteToInt(sr);
+	char *ptr = (char *)sr + 4;
+	while (nr--)
+	{
+		int len = strlen(ptr);
+		cout << ptr << endl;
+		ptr += len + 1;
+	}
+	return 0;
+
 	intToByte(strlen(content), &buf[2]);
 	memcpy(&buf[7], content, strlen(content));
 	int len = byteToInt(&buf[2]);
@@ -627,7 +642,7 @@ int main()
 
 #ifdef WIN32
 int
-maing(int argc, char **argv)
+main(int argc, char **argv)
 #else
 int
 main(int argc, char **argv)
@@ -720,6 +735,7 @@ struct sockaddr *sa, int socklen, void *user_data)
 	struct event_base *base = (struct event_base *)user_data;
 	struct bufferevent *bev;
 
+	printf("Client fd is: %d", fd);
 	bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
 	if (!bev) {
 		fprintf(stderr, "Error constructing bufferevent!");
@@ -729,9 +745,11 @@ struct sockaddr *sa, int socklen, void *user_data)
 	bufferevent_setcb(bev, conn_readcb, conn_writecb, conn_eventcb, NULL);
 	bufferevent_enable(bev, EV_READ | EV_WRITE);
 	//bufferevent_disable(bev, EV_READ);
-	const char *conmsg = "I can hear you now\n";
+	char buf[10];
+	const char *conmsg = "OK!";
+	auto len = sm.encrypt(conmsg, strlen(conmsg), buf, 8);
 	//bufferevent_write(bev, MESSAGE, strlen(MESSAGE));
-	bufferevent_write(bev, conmsg, strlen(conmsg));
+	bufferevent_write(bev, buf, len);
 }
 
 static void
@@ -740,71 +758,79 @@ conn_readcb(struct bufferevent *bev, void *user_data)
 	/** TODO: to avoid server blocking, the operation in this
 	function may need to put into a seperating thread.
 	**/
-	static const size_t BUFSIZE = 1024;
-	char buf[BUFSIZE + 64];
+	static const size_t BUFSIZE = 10240;
+	char buf[BUFSIZE + 64], src[BUFSIZE + 64];
 	const char *pret = nullptr;
 	//memset(buf, 0, sizeof(buf));
 	int iRetCode = -999;
-	int byteRead = bufferevent_read(bev, buf, BUFSIZE);
+	int byteRead = bufferevent_read(bev, src, BUFSIZE);
 	int len;
-	//filter out invalid streams
-	if (byteRead < COMMAND_LEN_LOWERBOUND)
+
+	do
 	{
-		printf("Invalid stream detected, discarding...\n");
-		goto ret2client;
-	}
+		//filter out invalid streams
+		if (byteRead < COMMAND_LEN_LOWERBOUND)
+		{
+			printf("Invalid stream detected, discarding...\n");
+			break;
+		}
+		
+		printf("Server Recv: \n");
+		fwrite(src, 1, byteRead, stdout);
+		printf("\nServer Recv end\n");
 
-	printf("Server Recv: \n");
-	fwrite(buf, 1, byteRead, stdout);
-	printf("\nServer Recv end\n");
+		//TODO: decrypt incoming content:
+		//StringEncryptor.decrypt(buf);
+		sm.decrypt(src, byteRead, buf, BUFSIZE);
 
-	//TODO: decrypt incoming content:
-	//StringEncryptor.decrypt(buf);
+		len = byteToInt(&buf[2]);
 
-	len = byteToInt(&buf[2]);
-	if (len <= 0 || byteRead < len + COMMAND_LEN_LOWERBOUND)
-	{
-		printf("Broken stream detected, discarding...\n");
-		iRetCode = -998;
-		goto ret2client;
-	}
-	buf[len + COMMAND_LEN_LOWERBOUND] = '\0';
+		if (len <= 0 || byteRead < len + COMMAND_LEN_LOWERBOUND)
+		{
+			printf("Broken stream detected, discarding...\n");
+			iRetCode = -998;
+			//goto ret2client;
+			break;
+		}
+		
+		buf[len + COMMAND_LEN_LOWERBOUND] = '\0';
 
-	//Parse command, proto
-	/**
-	Proto format V1.0:
-	B(byte) 1-2: proto id, 1001 for Login;
-	B 3-6 (type int): proto content length in bytes, with proto id and length excluded;
-	B 7- end of proto: proto content, fields may seperated by \t (tab)
+		//Parse command, proto
+		/**
+		Proto format V1.0:
+		B(byte) 1-2: proto id, 1001 for Login;
+		B 3-6 (type int): proto content length in bytes, with proto id and length excluded;
+		B 7- end of proto: proto content, fields may seperated by \t (tab)
 
-	example: proto Login with email abc@foobar.com and password '123456'
-	the proto string would expected to be
-	10 01    21(int)    abc@foobar.com  (\t)	123456
-	BYTE:   1  2     3-6        7        --------           27
-	**/
+		example: proto Login with email abc@foobar.com and password '123456'
+		the proto string would expected to be
+		10 01    21(int)    abc@foobar.com  (\t)	123456
+		BYTE:   1  2     3-6        7        --------           27
+		**/
 
-	{	//#C2362 in VS2013
 		iRetCode = -1;
 		static auto ppf = ProtoFactory::getInstance();
 		auto protoType = ppf->getProtoTypeFromStream(buf);
 		unique_ptr<ProtoHandlerBase> ph(ppf->getProtoHandler(protoType));
-		auto cmd = ph->doCommand(&buf[7], len);
+		auto cmd = ph->doCommand(&buf[6], len);
 		if (ErrorCode::OK == cmd)
 		{
-			pret = ph->serializeResult(buf, BUFSIZE, &len);
+			len = 0;
+			pret = ph->serializeResult(buf + 6, BUFSIZE, &len);
 			//TODO: write the result to client
 		}
 		else
 		{
 			iRetCode = ph->getErrorCode();
 		}
-	}
+	} while (0);
 
-ret2client:
-	intToByte(iRetCode, buf);
+	intToByte(iRetCode, buf + 2);
 	//TODO: encrypt outcoming content:
 	//StringEncryptor.encrypt(buf);
-	bufferevent_write(bev, buf, 4);
+	len = sm.encrypt(buf, len + 7, src, BUFSIZE);
+	printf("Writing %d bytes to client %d", len, bev);
+	bufferevent_write(bev, src, len);
 }
 
 static void

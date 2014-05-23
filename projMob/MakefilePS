@@ -1,0 +1,20 @@
+CC = g++
+LIBS = -levent -lhiredis -lpthread
+LPATH = -L3rd/libevent-2.0.21-stable/.libs -L3rd/redis/libs 
+IPATH = -I3rd/libevent-2.0.21-stable/include -I3rd/redis/include/hiredis
+OBJCOMM = tcpasync.o
+OBJS = psserver.o
+OBJC = setupTestc.o
+SERVERNAME = server
+CLIENTNAME = client
+WARNINGS = -Wall -ggdb
+main: ${OBJCOMM} setupTest.o
+	CC ${WARNINGS} -static -std=c++11 -o ${SERVERNAME} ${OBJCOMM} ${OBJS} ${LIBS} ${LPATH}
+	CC ${WARNINGS} -static -std=c++11 -o ${CLIENTNAME} ${OBJCOMM} ${OBJC} ${LIBS} ${LPATH}
+clean:
+	rm -f ${SERVERNAME} ${CLIENTNAME} ${OBJS} ${OBJCOMM}
+setupTest.o: ./projMob/setupTest.cpp
+	CC ${WARNINGS} -c -std=c++11 ./projMob/PSserver.cpp -o ${OBJS} ${IPATH}
+	CC ${WARNINGS} -c -std=c++11 ./projMob/SetuptestClient.cpp -o ${OBJC} ${IPATH}
+${OBJCOMM}: ./projMob/TCPSocketAsync.cpp
+	CC ${WARNINGS} -c -std=c++11 ./projMob/TCPSocketAsync.cpp -o tcpasync.o ${IPATH}
